@@ -65,110 +65,22 @@ mkdir -p airflow/{dags,logs,plugins}
 mkdir -p mlflow_artifacts
 mkdir -p logs/{scheduler,webserver}
 
-# Create environment configuration file
-echo "🔧 Creating environment configuration..."
-cat > .env << EOF
-# Stellar Classification MLOps Pipeline Environment
-PROJECT_DIR=$PROJECT_DIR
-AIRFLOW_HOME=$PROJECT_DIR
-PYTHONPATH=$PROJECT_DIR/src:\$PYTHONPATH
-AIRFLOW__CORE__DAGS_FOLDER=$PROJECT_DIR/airflow/dags
-AIRFLOW__CORE__LOAD_EXAMPLES=false
-AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
-AIRFLOW__CORE__XCOM_BACKEND=airflow.models.xcom.BaseXCom
-AIRFLOW__CORE__EXECUTOR=LocalExecutor
-AIRFLOW__CORE__AUTH_MANAGER=airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@localhost:5432/airflow_db
-MLFLOW_TRACKING_URI=file://$PROJECT_DIR/mlruns
-MLFLOW_DEFAULT_ARTIFACT_ROOT=$PROJECT_DIR/mlflow_artifacts
-EOF
-
-# Source environment variables
-source .env
-
-# Update airflow.cfg to use absolute path and disable examples
-echo "🔧 Updating Airflow configuration..."
-sed -i "s|dags_folder = .*|dags_folder = $PROJECT_DIR/airflow/dags|" airflow.cfg
-sed -i "s|load_examples = .*|load_examples = False|" airflow.cfg
-sed -i "s|dags_are_paused_at_creation = .*|dags_are_paused_at_creation = False|" airflow.cfg
-
-# Update database connection to PostgreSQL
-echo "🔧 Configuring PostgreSQL connection..."
-sed -i "s|sql_alchemy_conn = .*|sql_alchemy_conn = postgresql+psycopg2://admin:admin@localhost:5432/airflow_db|" airflow.cfg
-
-# Ensure executor is set to LocalExecutor
-sed -i "s|executor = .*|executor = LocalExecutor|" airflow.cfg
-
-# Verify critical configurations
-echo "📋 Verifying configuration..."
-echo "DAGs folder: $(grep 'dags_folder' airflow.cfg)"
-echo "Load examples: $(grep 'load_examples' airflow.cfg)"
-echo "Database: $(grep 'sql_alchemy_conn' airflow.cfg)"
-echo "Executor: $(grep '^executor' airflow.cfg)"
-
-# Initialize Airflow database with PostgreSQL
-echo "🔧 Initializing Airflow database..."
-# Remove any existing SQLite database
-rm -f airflow.db
-airflow db init
-
-# Create admin user
-echo "👤 Creating Airflow admin user (admin/admin)..."
-airflow users create \
-    --username admin \
-    --password admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
-    --email admin@example.com || echo "Admin user already exists"
-
-# Verify DAG is detected
-echo "🔍 Verifying DAG detection..."
-if airflow dags list | grep -q stellar; then
-    echo "✅ Stellar DAG detected successfully!"
-else
-    echo "⚠️ Stellar DAG not detected - checking DAG file..."
-    if [ -f "airflow/dags/stellar_pipeline_dag.py" ]; then
-        echo "✅ DAG file exists at airflow/dags/stellar_pipeline_dag.py"
-        echo "🔍 Testing DAG import..."
-        python -c "
-import sys, os
-sys.path.append('$PROJECT_DIR/src')
-os.chdir('$PROJECT_DIR')
-try:
-    from airflow.dags.stellar_pipeline_dag import dag
-    print('✅ DAG imported successfully!')
-except Exception as e:
-    print(f'❌ DAG import failed: {e}')
-"
-    else
-        echo "❌ DAG file not found! Please check airflow/dags/stellar_pipeline_dag.py"
-    fi
+# Verify DAG file exists
+if [ ! -f "airflow/dags/stellar_pipeline_dag.py" ]; then
+    echo "❌ ERROR: DAG file not found at airflow/dags/stellar_pipeline_dag.py"
+    echo "Please ensure the DAG file exists before running setup."
+    exit 1
 fi
 
-# Set permissions
-chmod +x start.sh stop.sh
-
-# Create a simple activation script
-cat > activate.sh << 'EOF'
-#!/bin/bash
-# Activate the stellar-mlops environment and set variables
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source $(conda info --base)/etc/profile.d/conda.sh
-conda activate stellar-mlops
-source "$PROJECT_DIR/.env"
-echo "✅ Environment activated. Project directory: $PROJECT_DIR"
-EOF
-chmod +x activate.sh
-
-# Generate fresh Airflow configuration for this system
-echo "🔧 Generating Airflow configuration for this system..."
+# Set environment variables
 export AIRFLOW_HOME=$PROJECT_DIR
+export PYTHONPATH=$PROJECT_DIR/src:$PYTHONPATH
 
-# Initialize fresh config
-airflow config init
+# Generate fresh, clean Airflow configuration
+echo "🔧 Generating clean Airflow configuration..."
+rm -f airflow.cfg airflow.db
 
-# Configure for PostgreSQL and production settings
+# Create minimal, production-ready airflow.cfg
 cat > airflow.cfg << EOF
 [core]
 dags_folder = $PROJECT_DIR/airflow/dags
@@ -186,17 +98,61 @@ base_log_folder = $PROJECT_DIR/logs
 [webserver]
 web_server_port = 8080
 expose_config = False
+
+[scheduler]
+dag_dir_list_interval = 300
 EOF
 
-echo "✅ Airflow configuration generated for this system"
+echo "✅ Clean Airflow configuration created"
+
+# Initialize Airflow database with PostgreSQL
+echo "🔧 Initializing Airflow database..."
+airflow db init
+
+# Create admin user
+echo "👤 Creating Airflow admin user (admin/admin)..."
+airflow users create \
+    --username admin \
+    --password admin \
+    --firstname Admin \
+    --lastname User \
+    --role Admin \
+    --email admin@example.com || echo "Admin user already exists"
+
+# Test database connection
+echo "🔍 Testing database connection..."
+python -c "
+import psycopg2
+try:
+    conn = psycopg2.connect(
+        host='localhost',
+        database='airflow_db',
+        user='admin',
+        password='admin'
+    )
+    print('✅ PostgreSQL connection successful')
+    conn.close()
+except Exception as e:
+    print(f'❌ Database connection failed: {e}')
+    exit(1)
+"
+
+# Verify DAG is detected
+echo "🔍 Verifying DAG detection..."
+if airflow dags list | grep -q stellar; then
+    echo "✅ Stellar DAG detected successfully!"
+    airflow dags unpause stellar_classification_pipeline || echo "DAG already unpaused"
+else
+    echo "⚠️ Stellar DAG not detected - will be available after starting services"
+fi
+
+# Set permissions
+chmod +x start.sh stop.sh
 
 echo "✅ Setup complete!"
 echo ""
 echo "🚀 To start the pipeline:"
 echo "   ./start.sh"
-echo ""
-echo "🔄 To activate environment manually:"
-echo "   source ./activate.sh"
 echo ""
 echo "🛑 To stop all services:"
 echo "   ./stop.sh"
@@ -208,3 +164,5 @@ echo "   - FastAPI: http://localhost:8000/docs"
 echo ""
 echo "📊 Your stellar_classification_pipeline DAG will be visible in Airflow UI!"
 echo "🔑 Database: PostgreSQL with admin/admin credentials"
+echo ""
+echo "⚠️  Important: This is a LOCAL Python pipeline (no Docker/Kubernetes required)"
