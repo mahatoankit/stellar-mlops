@@ -1,0 +1,6 @@
+artifact_location: file:///home/ankit/WindowsFuneral/BCU/MLOPS-BCU/telco-mlops-pipeline/mlruns/379769089265839969
+creation_time: 1756848718891
+experiment_id: '379769089265839969'
+last_update_time: 1756848718891
+lifecycle_stage: active
+name: stellar_classification

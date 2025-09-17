@@ -1,0 +1,51 @@
+# Stellar Classification Pipeline Configuration
+dataset:
+  name: "stellar_classification"
+  source: "Sloan Digital Sky Survey DR17"
+  data_path: "data/raw/star_classification.csv"
+  target_column: "class"
+  test_size: 0.2
+  random_state: 42
+
+data:
+  target_column: "class"
+  feature_columns:
+    - "u"
+    - "g" 
+    - "r"
+    - "i"
+    - "z"
+    - "specobjid"
+    - "redshift"
+    - "plate"
+    - "mjd"
+    - "fiberid"
+  class_mapping:
+    "GALAXY": 0
+    "STAR": 1
+    "QSO": 2
+
+preprocessing:
+  handle_missing: true
+  remove_outliers: true
+  outlier_method: "lof"
+  outlier_threshold: 0.1
+
+feature_engineering:
+  create_color_indices: true
+  scale_features: true
+
+models:
+  svm:
+    kernel: "rbf"
+    C: 1
+    gamma: "scale"
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    random_state: 42
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    random_state: 42

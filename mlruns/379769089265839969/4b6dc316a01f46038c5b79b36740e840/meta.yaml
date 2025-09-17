@@ -1,0 +1,15 @@
+artifact_uri: file:///home/ankit/WindowsFuneral/BCU/MLOPS-BCU/telco-mlops-pipeline/mlruns/379769089265839969/4b6dc316a01f46038c5b79b36740e840/artifacts
+end_time: 1756850010779
+entry_point_name: ''
+experiment_id: '379769089265839969'
+lifecycle_stage: active
+run_id: 4b6dc316a01f46038c5b79b36740e840
+run_name: stellar_classification_training
+run_uuid: 4b6dc316a01f46038c5b79b36740e840
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1756849965528
+status: 3
+tags: []
+user_id: ankit

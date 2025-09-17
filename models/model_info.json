@@ -1,0 +1,10 @@
+{
+  "model_name": "stellar_classifier_final",
+  "model_type": "RandomForestClassifier",
+  "feature_count": 21,
+  "classes": [
+    "GALAXY",
+    "STAR",
+    "QSO"
+  ]
+}

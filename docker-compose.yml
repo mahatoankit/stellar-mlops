@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # MariaDB ColumnStore Database
+  mariadb-columnstore:
+    image: mariadb/columnstore:latest
+    container_name: stellar-mariadb
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: stellar_password
+      MARIADB_DATABASE: stellar_db
+      MARIADB_USER: stellar_user
+      MARIADB_PASSWORD: stellar_user_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pstellar_password"]
+      timeout: 20s
+      retries: 10
+
+  # Standalone Airflow
+  airflow-standalone:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-standalone
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'simple-key'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+      # MariaDB connection details
+      MARIADB_HOST: mariadb-columnstore
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: stellar_db
+      MARIADB_USER: stellar_user
+      MARIADB_PASSWORD: stellar_user_password
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./models:/opt/airflow/models
+      - ./config:/opt/airflow/config
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+        airflow webserver --port 8080 --daemon &&
+        airflow scheduler
+      "
+    restart: unless-stopped
+    depends_on:
+      mariadb-columnstore:
+        condition: service_healthy
+
+  # FastAPI service
+  fastapi-app:
+    image: python:3.9-slim
+    container_name: stellar-fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      # MariaDB connection details
+      MARIADB_HOST: mariadb-columnstore
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: stellar_db
+      MARIADB_USER: stellar_user
+      MARIADB_PASSWORD: stellar_user_password
+    volumes:
+      - ./api:/app/api
+      - ./models:/app/models
+      - ./src:/app/src
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install fastapi uvicorn pandas numpy scikit-learn joblib pyyaml mysql-connector-python &&
+        uvicorn api.stellar_main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    restart: unless-stopped
+    depends_on:
+      mariadb-columnstore:
+        condition: service_healthy
+
+  # MLflow for experiment tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.1
+    container_name: stellar-mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./artifacts
+    volumes:
+      - ./mlflow_data:/mlflow
+    restart: always
+
+# Volumes for persistent data storage
+volumes:
+  mariadb_data:
+    driver: local
