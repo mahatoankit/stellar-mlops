@@ -91,8 +91,24 @@ sed -i "s|dags_folder = .*|dags_folder = $PROJECT_DIR/airflow/dags|" airflow.cfg
 sed -i "s|load_examples = .*|load_examples = False|" airflow.cfg
 sed -i "s|dags_are_paused_at_creation = .*|dags_are_paused_at_creation = False|" airflow.cfg
 
+# Update database connection to PostgreSQL
+echo "🔧 Configuring PostgreSQL connection..."
+sed -i "s|sql_alchemy_conn = .*|sql_alchemy_conn = postgresql+psycopg2://airflow:airflow_password@localhost:5432/airflow_db|" airflow.cfg
+
+# Ensure executor is set to LocalExecutor
+sed -i "s|executor = .*|executor = LocalExecutor|" airflow.cfg
+
+# Verify critical configurations
+echo "📋 Verifying configuration..."
+echo "DAGs folder: $(grep 'dags_folder' airflow.cfg)"
+echo "Load examples: $(grep 'load_examples' airflow.cfg)"
+echo "Database: $(grep 'sql_alchemy_conn' airflow.cfg)"
+echo "Executor: $(grep '^executor' airflow.cfg)"
+
 # Initialize Airflow database with PostgreSQL
 echo "🔧 Initializing Airflow database..."
+# Remove any existing SQLite database
+rm -f airflow.db
 airflow db init
 
 # Create admin user
@@ -107,7 +123,27 @@ airflow users create \
 
 # Verify DAG is detected
 echo "🔍 Verifying DAG detection..."
-airflow dags list | grep stellar || echo "⚠️ Stellar DAG not detected yet - will be available after starting services"
+if airflow dags list | grep -q stellar; then
+    echo "✅ Stellar DAG detected successfully!"
+else
+    echo "⚠️ Stellar DAG not detected - checking DAG file..."
+    if [ -f "airflow/dags/stellar_pipeline_dag.py" ]; then
+        echo "✅ DAG file exists at airflow/dags/stellar_pipeline_dag.py"
+        echo "🔍 Testing DAG import..."
+        python -c "
+import sys, os
+sys.path.append('$PROJECT_DIR/src')
+os.chdir('$PROJECT_DIR')
+try:
+    from airflow.dags.stellar_pipeline_dag import dag
+    print('✅ DAG imported successfully!')
+except Exception as e:
+    print(f'❌ DAG import failed: {e}')
+"
+    else
+        echo "❌ DAG file not found! Please check airflow/dags/stellar_pipeline_dag.py"
+    fi
+fi
 
 # Set permissions
 chmod +x start.sh stop.sh
