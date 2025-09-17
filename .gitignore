@@ -128,3 +128,5 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+airflow.cfg
+airflow.cfg
