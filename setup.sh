@@ -18,6 +18,16 @@ if ! command -v conda &> /dev/null; then
     exit 1
 fi
 
+# Install system dependencies for PostgreSQL (if not already installed)
+echo "🔧 Installing system dependencies..."
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+
+# Start and enable PostgreSQL service
+echo "🐘 Setting up PostgreSQL..."
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
 # Create conda environment (if it doesn't exist)
 if ! conda env list | grep -q "stellar-mlops"; then
     echo "📦 Creating conda environment..."
@@ -34,6 +44,17 @@ conda activate stellar-mlops
 # Install requirements
 echo "⬇️ Installing Python packages..."
 pip install -r requirements.txt
+
+# Install PostgreSQL Python driver
+echo "📊 Installing PostgreSQL driver..."
+pip install psycopg2-binary
+
+# Set up PostgreSQL database for Airflow
+echo "🗄️ Setting up Airflow database..."
+sudo -u postgres psql -c "CREATE DATABASE airflow_db;" 2>/dev/null || echo "Database airflow_db already exists"
+sudo -u postgres psql -c "CREATE USER airflow WITH PASSWORD 'airflow_password';" 2>/dev/null || echo "User airflow already exists"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow;"
+sudo -u postgres psql -c "ALTER USER airflow CREATEDB;"
 
 # Create necessary directories
 echo "📁 Creating directories..."
@@ -56,6 +77,7 @@ AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
 AIRFLOW__CORE__XCOM_BACKEND=airflow.models.xcom.BaseXCom
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
 AIRFLOW__CORE__AUTH_MANAGER=airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@localhost:5432/airflow_db
 MLFLOW_TRACKING_URI=file://$PROJECT_DIR/mlruns
 MLFLOW_DEFAULT_ARTIFACT_ROOT=$PROJECT_DIR/mlflow_artifacts
 EOF
@@ -63,23 +85,23 @@ EOF
 # Source environment variables
 source .env
 
-# Initialize Airflow database (if not already done)
-if [ ! -f "airflow.db" ]; then
-    echo "🗄️ Initializing Airflow database..."
-    airflow db init
-else
-    echo "✅ Airflow database already initialized"
-fi
+# Initialize Airflow database with PostgreSQL
+echo "🔧 Initializing Airflow database..."
+airflow db init
 
-# Create admin user (if not exists)
-echo "👤 Creating admin user..."
+# Create admin user
+echo "👤 Creating Airflow admin user..."
 airflow users create \
     --username admin \
     --password admin \
     --firstname Admin \
     --lastname User \
     --role Admin \
-    --email admin@example.com 2>/dev/null || echo "ℹ️ Admin user already exists"
+    --email admin@example.com
+
+# Verify DAG is detected
+echo "🔍 Verifying DAG detection..."
+airflow dags list | grep stellar || echo "⚠️ Stellar DAG not detected yet - will be available after starting services"
 
 # Set permissions
 chmod +x start.sh stop.sh
@@ -111,3 +133,5 @@ echo "🌐 Access points (after starting):"
 echo "   - Airflow UI: http://localhost:8080 (admin/admin)"
 echo "   - MLflow UI: http://localhost:5000"
 echo "   - FastAPI: http://localhost:8000/docs"
+echo ""
+echo "📊 Your stellar_classification_pipeline DAG will be visible in Airflow UI!"
