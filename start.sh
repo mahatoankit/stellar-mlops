@@ -69,7 +69,21 @@ sleep 10
 # Store PIDs for easy cleanup
 echo "$SCHEDULER_PID $WEBSERVER_PID $MLFLOW_PID $FASTAPI_PID" > .pids
 
-echo ""
+# Ensure PostgreSQL is running
+sudo systemctl start postgresql
+
+# Set environment variables before starting services
+export AIRFLOW_HOME="$PROJECT_DIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"
+
+# Initialize Airflow database
+echo "🛠️ Initializing Airflow database..."
+airflow db init
+
+# Create MLflow artifacts directory if it doesn't exist
+mkdir -p mlflow_artifacts
+
+# ✅ All services started successfully
 echo "✅ All services started successfully!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🌐 Service URLs:"

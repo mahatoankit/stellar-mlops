@@ -1,4 +1,13 @@
-# 🌟 Stellar Classification MLOps Pipeline
+# ...existing code...
+
+# Ensure PostgreSQL is running
+sudo systemctl start postgresql
+
+# Set environment variables before starting services
+export AIRFLOW_HOME="$PROJECT_DIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"
+
+# ...rest of existing code...# 🌟 Stellar Classification MLOps Pipeline
 
 A comprehensive MLOps pipeline for stellar object classification using the SDSS17 dataset. This project demonstrates end-to-end machine learning workflow orchestration with Apache Airflow, MLflow experiment tracking, and FastAPI model serving.
 
