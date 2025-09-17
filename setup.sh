@@ -85,6 +85,12 @@ EOF
 # Source environment variables
 source .env
 
+# Update airflow.cfg to use absolute path and disable examples
+echo "🔧 Updating Airflow configuration..."
+sed -i "s|dags_folder = .*|dags_folder = $PROJECT_DIR/airflow/dags|" airflow.cfg
+sed -i "s|load_examples = .*|load_examples = False|" airflow.cfg
+sed -i "s|dags_are_paused_at_creation = .*|dags_are_paused_at_creation = False|" airflow.cfg
+
 # Initialize Airflow database with PostgreSQL
 echo "🔧 Initializing Airflow database..."
 airflow db init
