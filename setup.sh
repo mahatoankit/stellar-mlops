@@ -52,9 +52,10 @@ pip install psycopg2-binary
 # Set up PostgreSQL database for Airflow
 echo "🗄️ Setting up Airflow database..."
 sudo -u postgres psql -c "CREATE DATABASE airflow_db;" 2>/dev/null || echo "Database airflow_db already exists"
-sudo -u postgres psql -c "CREATE USER airflow WITH PASSWORD 'airflow_password';" 2>/dev/null || echo "User airflow already exists"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow;"
-sudo -u postgres psql -c "ALTER USER airflow CREATEDB;"
+sudo -u postgres psql -c "CREATE USER admin WITH PASSWORD 'admin';" 2>/dev/null || echo "User admin already exists"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE airflow_db TO admin;"
+sudo -u postgres psql -c "ALTER USER admin CREATEDB;"
+sudo -u postgres psql -c "ALTER USER admin WITH SUPERUSER;"
 
 # Create necessary directories
 echo "📁 Creating directories..."
@@ -77,7 +78,7 @@ AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
 AIRFLOW__CORE__XCOM_BACKEND=airflow.models.xcom.BaseXCom
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
 AIRFLOW__CORE__AUTH_MANAGER=airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@localhost:5432/airflow_db
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@localhost:5432/airflow_db
 MLFLOW_TRACKING_URI=file://$PROJECT_DIR/mlruns
 MLFLOW_DEFAULT_ARTIFACT_ROOT=$PROJECT_DIR/mlflow_artifacts
 EOF
@@ -93,7 +94,7 @@ sed -i "s|dags_are_paused_at_creation = .*|dags_are_paused_at_creation = False|"
 
 # Update database connection to PostgreSQL
 echo "🔧 Configuring PostgreSQL connection..."
-sed -i "s|sql_alchemy_conn = .*|sql_alchemy_conn = postgresql+psycopg2://airflow:airflow_password@localhost:5432/airflow_db|" airflow.cfg
+sed -i "s|sql_alchemy_conn = .*|sql_alchemy_conn = postgresql+psycopg2://admin:admin@localhost:5432/airflow_db|" airflow.cfg
 
 # Ensure executor is set to LocalExecutor
 sed -i "s|executor = .*|executor = LocalExecutor|" airflow.cfg
@@ -112,14 +113,14 @@ rm -f airflow.db
 airflow db init
 
 # Create admin user
-echo "👤 Creating Airflow admin user..."
+echo "👤 Creating Airflow admin user (admin/admin)..."
 airflow users create \
     --username admin \
     --password admin \
     --firstname Admin \
     --lastname User \
     --role Admin \
-    --email admin@example.com
+    --email admin@example.com || echo "Admin user already exists"
 
 # Verify DAG is detected
 echo "🔍 Verifying DAG detection..."
@@ -177,3 +178,4 @@ echo "   - MLflow UI: http://localhost:5000"
 echo "   - FastAPI: http://localhost:8000/docs"
 echo ""
 echo "📊 Your stellar_classification_pipeline DAG will be visible in Airflow UI!"
+echo "🔑 Database: PostgreSQL with admin/admin credentials"

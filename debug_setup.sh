@@ -30,6 +30,7 @@ echo "--------------------"
 if systemctl is-active --quiet postgresql; then
     echo "✅ PostgreSQL service running"
     sudo -u postgres psql -c "\l" | grep airflow_db && echo "✅ airflow_db exists" || echo "❌ airflow_db missing"
+    sudo -u postgres psql -c "\du" | grep admin && echo "✅ admin user exists" || echo "❌ admin user missing"
 else
     echo "❌ PostgreSQL service not running"
 fi
