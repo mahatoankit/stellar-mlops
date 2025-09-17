@@ -161,6 +161,35 @@ echo "✅ Environment activated. Project directory: $PROJECT_DIR"
 EOF
 chmod +x activate.sh
 
+# Generate fresh Airflow configuration for this system
+echo "🔧 Generating Airflow configuration for this system..."
+export AIRFLOW_HOME=$PROJECT_DIR
+
+# Initialize fresh config
+airflow config init
+
+# Configure for PostgreSQL and production settings
+cat > airflow.cfg << EOF
+[core]
+dags_folder = $PROJECT_DIR/airflow/dags
+executor = LocalExecutor
+load_examples = False
+dags_are_paused_at_creation = False
+auth_manager = airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
+
+[database]
+sql_alchemy_conn = postgresql+psycopg2://admin:admin@localhost:5432/airflow_db
+
+[logging]
+base_log_folder = $PROJECT_DIR/logs
+
+[webserver]
+web_server_port = 8080
+expose_config = False
+EOF
+
+echo "✅ Airflow configuration generated for this system"
+
 echo "✅ Setup complete!"
 echo ""
 echo "🚀 To start the pipeline:"
