@@ -2,7 +2,7 @@
 # STELLAR CLASSIFICATION MLOPS PIPELINE - AIRFLOW CONTAINER
 # =============================================================================
 
-FROM apache/airflow:2.9.1
+FROM apache/airflow:2.7.3-python3.9
 
 # Switch to root for system packages
 USER root
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libpng-dev \
     libfontconfig1-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories with proper permissions
@@ -26,6 +27,8 @@ RUN mkdir -p \
     /opt/airflow/dags \
     /opt/airflow/plugins \
     /opt/airflow/data \
+    /opt/airflow/data/temp \
+    /opt/airflow/data/processed \
     /opt/airflow/models \
     /opt/airflow/src \
     /opt/airflow/config \
@@ -40,7 +43,7 @@ RUN pip install --no-cache-dir \
     # Database Connectivity
     mysql-connector-python==8.0.33 \
     PyMySQL==1.1.0 \
-    SQLAlchemy==2.0.23 \
+    SQLAlchemy==1.4.53 \
     # Data Processing
     pandas==2.1.4 \
     numpy==1.26.4 \

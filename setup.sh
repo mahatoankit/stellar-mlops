@@ -38,13 +38,33 @@ if ! command -v docker &> /dev/null; then
     echo "   Or run: newgrp docker"
 fi
 
-# Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
-    echo "📦 Installing Docker Compose..."
+# Check if Docker Compose is installed and working
+if ! command -v docker-compose &> /dev/null || ! docker-compose --version &> /dev/null; then
+    echo "📦 Installing/Upgrading Docker Compose..."
+    
+    # Remove old versions
+    sudo rm -f /usr/local/bin/docker-compose
+    sudo apt remove -y docker-compose &> /dev/null || true
+    
+    # Install latest Docker Compose
     sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     sudo chmod +x /usr/local/bin/docker-compose
+    
     echo "✅ Docker Compose installed successfully!"
 fi
+
+# Ensure we're using the correct Docker Compose
+export PATH="/usr/local/bin:$PATH"
+echo "🔍 Docker Compose version: $(docker-compose --version)"
+
+# Fix Docker permissions
+echo "🔧 Configuring Docker permissions..."
+sudo usermod -aG docker $USER
+
+# Remove any problematic environment variables
+unset DOCKER_HOST 2>/dev/null || true
+unset DOCKER_TLS_VERIFY 2>/dev/null || true
+unset DOCKER_CERT_PATH 2>/dev/null || true
 
 # Verify Docker is running
 if ! docker info &> /dev/null; then

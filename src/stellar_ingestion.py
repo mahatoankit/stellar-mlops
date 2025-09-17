@@ -130,40 +130,30 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
         raise
 
 
-def load_stellar_data(data_path: str) -> pd.DataFrame:
-    """
-    Load stellar classification dataset.
-
-    Args:
-        data_path: Path to the CSV file containing stellar data
-
-    Returns:
-        DataFrame with stellar data
-
-    Raises:
-        FileNotFoundError: If data file doesn't exist
-        pd.errors.EmptyDataError: If data file is empty
-    """
+def load_stellar_data(data_path):
+    """Load stellar data from CSV file"""
+    print(f"Loading data from {data_path}")
+    
     try:
-        data_file = Path(data_path)
-        if not data_file.exists():
-            raise FileNotFoundError(f"Data file not found: {data_path}")
-
-        # Load the data
-        df = pd.read_csv(data_path)
-
-        if df.empty:
-            raise pd.errors.EmptyDataError("Data file is empty")
-
-        logger.info(
-            f"✅ Loaded stellar data: {df.shape[0]} rows, {df.shape[1]} columns"
-        )
-        logger.info(f"Columns: {list(df.columns)}")
-
+        # First try to load the clean dataset
+        clean_path = data_path.replace('star_classification.csv', 'star_classification_clean.csv')
+        if os.path.exists(clean_path):
+            print(f"Using clean dataset: {clean_path}")
+            df = pd.read_csv(clean_path)
+        else:
+            print(f"Clean dataset not found, trying original: {data_path}")
+            # Try to read with specific parameters
+            df = pd.read_csv(data_path, nrows=1000)  # Limit rows for safety
+        
+        print(f"SUCCESS: DataFrame shape: {df.shape}")
+        print(f"Columns: {list(df.columns)}")
+        print(f"Sample data types:")
+        print(df.dtypes)
+        
         return df
-
+        
     except Exception as e:
-        logger.error(f"❌ Error loading data from {data_path}: {e}")
+        print(f"Error loading data: {str(e)}")
         raise
 
 

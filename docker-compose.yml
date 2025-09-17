@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MariaDB ColumnStore Database
   mariadb-columnstore:
@@ -21,6 +19,22 @@ services:
       timeout: 20s
       retries: 10
 
+  # PostgreSQL Database for Airflow
+  postgres:
+    image: postgres:13
+    container_name: stellar-postgres
+    environment:
+      POSTGRES_DB: airflow_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "admin", "-d", "airflow_db"]
+      interval: 5s
+      retries: 5
+
   # Standalone Airflow
   airflow-standalone:
     build:
@@ -30,35 +44,48 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgres:5432/airflow_db
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'simple-key'
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
       # MariaDB connection details
       MARIADB_HOST: mariadb-columnstore
       MARIADB_PORT: 3306
       MARIADB_DATABASE: stellar_db
       MARIADB_USER: stellar_user
       MARIADB_PASSWORD: stellar_user_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mariadb-columnstore:
+        condition: service_healthy
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
       - ./data:/opt/airflow/data
+      - ./data/temp:/opt/airflow/data/temp
+      - ./data/processed:/opt/airflow/data/processed
       - ./models:/opt/airflow/models
       - ./config:/opt/airflow/config
+    working_dir: /opt/airflow
     command: >
       bash -c "
+        pip install psycopg2-binary &&
         airflow db init &&
         airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
-        airflow webserver --port 8080 --daemon &&
-        airflow scheduler
+        airflow scheduler &
+        airflow webserver --port 8080
       "
     restart: unless-stopped
-    depends_on:
-      mariadb-columnstore:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # FastAPI service
   fastapi-app:
@@ -102,4 +129,6 @@ services:
 # Volumes for persistent data storage
 volumes:
   mariadb_data:
+    driver: local
+  postgres_data:
     driver: local
