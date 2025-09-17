@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# STELLAR CLASSIFICATION MLOPS PIPELINE - ENVIRONMENT SETUP
+# STELLAR CLASSIFICATION MLOPS PIPELINE - DOCKER SETUP
 # =============================================================================
 
 set -e
@@ -9,109 +9,105 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
-echo "🌟 Setting up Stellar Classification MLOps Pipeline..."
+echo "🌟 Setting up Stellar Classification MLOps Pipeline with Docker..."
 echo "📁 Project directory: $PROJECT_DIR"
 
-# Check if conda is available
-if ! command -v conda &> /dev/null; then
-    echo "❌ Conda is not installed. Please install Miniconda or Anaconda first."
-    exit 1
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker is not installed. Installing Docker..."
+    
+    # Install Docker on Ubuntu
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl gnupg lsb-release
+    
+    # Add Docker's official GPG key
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    
+    # Set up Docker repository
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Install Docker Engine
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io
+    
+    # Add current user to docker group
+    sudo usermod -aG docker $USER
+    
+    echo "✅ Docker installed successfully!"
+    echo "⚠️  Please log out and log back in for Docker group changes to take effect"
+    echo "   Or run: newgrp docker"
 fi
 
-# Install system dependencies for PostgreSQL (if not already installed)
-echo "🔧 Installing system dependencies..."
-sudo apt update
-sudo apt install -y postgresql postgresql-contrib
-
-# Start and enable PostgreSQL service
-echo "🐘 Setting up PostgreSQL..."
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Create conda environment (if it doesn't exist)
-if ! conda env list | grep -q "stellar-mlops"; then
-    echo "📦 Creating conda environment..."
-    conda create -n stellar-mlops python=3.9 -y
-else
-    echo "✅ Conda environment 'stellar-mlops' already exists"
+# Check if Docker Compose is installed
+if ! command -v docker-compose &> /dev/null; then
+    echo "📦 Installing Docker Compose..."
+    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "✅ Docker Compose installed successfully!"
 fi
 
-# Activate environment
-echo "🔄 Activating environment..."
-source $(conda info --base)/etc/profile.d/conda.sh
-conda activate stellar-mlops
+# Verify Docker is running
+if ! docker info &> /dev/null; then
+    echo "🔄 Starting Docker service..."
+    sudo systemctl start docker
+    sudo systemctl enable docker
+fi
 
-# Install requirements
-echo "⬇️ Installing Python packages..."
-pip install -r requirements.txt
-
-# Install PostgreSQL Python driver
-echo "📊 Installing PostgreSQL driver..."
-pip install psycopg2-binary
-
-# Set up PostgreSQL database for Airflow
-echo "🗄️ Setting up Airflow database..."
-sudo -u postgres psql -c "CREATE DATABASE airflow_db;" 2>/dev/null || echo "Database airflow_db already exists"
-sudo -u postgres psql -c "CREATE USER admin WITH PASSWORD 'admin';" 2>/dev/null || echo "User admin already exists"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE airflow_db TO admin;"
-sudo -u postgres psql -c "ALTER USER admin CREATEDB;"
-sudo -u postgres psql -c "ALTER USER admin WITH SUPERUSER;"
-
-# Create necessary directories
-echo "📁 Creating directories..."
+# Create necessary directories for Docker volumes
+echo "📁 Creating directories for Docker volumes..."
 mkdir -p data/{raw,processed,temp,plots}
 mkdir -p models
-mkdir -p airflow/{dags,logs,plugins}
 mkdir -p mlflow_artifacts
-mkdir -p logs/{scheduler,webserver}
+mkdir -p logs/{airflow,mlflow,fastapi}
+mkdir -p postgres_data
 
-# Verify DAG file exists
-if [ ! -f "airflow/dags/stellar_pipeline_dag.py" ]; then
-    echo "❌ ERROR: DAG file not found at airflow/dags/stellar_pipeline_dag.py"
-    echo "Please ensure the DAG file exists before running setup."
+# Set proper permissions for Docker volumes
+sudo chown -R $USER:$USER data models mlflow_artifacts logs postgres_data
+
+# Create environment file for Docker Compose
+echo "🔧 Creating environment configuration..."
+cat > .env << EOF
+# Stellar Classification MLOps Pipeline Environment
+PROJECT_DIR=$PROJECT_DIR
+POSTGRES_DB=airflow_db
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=admin
+AIRFLOW_ADMIN_USERNAME=admin
+AIRFLOW_ADMIN_PASSWORD=admin
+MLFLOW_BACKEND_STORE_URI=postgresql://admin:admin@postgres:5432/mlflow_db
+MLFLOW_ARTIFACT_ROOT=/opt/mlflow/artifacts
+EOF
+
+# Verify Docker Compose file exists
+if [ ! -f "docker-compose.yml" ]; then
+    echo "❌ ERROR: docker-compose.yml not found!"
+    echo "Please ensure docker-compose.yml exists in the project root."
     exit 1
 fi
 
-# Set environment variables
-export AIRFLOW_HOME=$PROJECT_DIR
-export PYTHONPATH=$PROJECT_DIR/src:$PYTHONPATH
+# Build Docker images
+echo "🔨 Building Docker images..."
+docker-compose build
 
-# Generate fresh, clean Airflow configuration
-echo "🔧 Generating clean Airflow configuration..."
-rm -f airflow.cfg airflow.db
+# Start services with Docker Compose
+echo "🚀 Starting services with Docker Compose..."
+docker-compose up -d
 
-# Create minimal, production-ready airflow.cfg
-cat > airflow.cfg << EOF
-[core]
-dags_folder = $PROJECT_DIR/airflow/dags
-executor = LocalExecutor
-load_examples = False
-dags_are_paused_at_creation = False
-auth_manager = airflow.auth.managers.fab.fab_auth_manager.FabAuthManager
+# Wait for services to be ready
+echo "⏳ Waiting for services to start..."
+sleep 30
 
-[database]
-sql_alchemy_conn = postgresql+psycopg2://admin:admin@localhost:5432/airflow_db
+# Check if services are running
+echo "🔍 Checking service status..."
+docker-compose ps
 
-[logging]
-base_log_folder = $PROJECT_DIR/logs
-
-[webserver]
-web_server_port = 8080
-expose_config = False
-
-[scheduler]
-dag_dir_list_interval = 300
-EOF
-
-echo "✅ Clean Airflow configuration created"
-
-# Initialize Airflow database with PostgreSQL
-echo "🔧 Initializing Airflow database..."
-airflow db init
+# Initialize Airflow (if needed)
+echo "🔧 Initializing Airflow in container..."
+docker-compose exec airflow-webserver airflow db init || echo "Database already initialized"
 
 # Create admin user
-echo "👤 Creating Airflow admin user (admin/admin)..."
-airflow users create \
+echo "👤 Creating Airflow admin user..."
+docker-compose exec airflow-webserver airflow users create \
     --username admin \
     --password admin \
     --firstname Admin \
@@ -119,50 +115,22 @@ airflow users create \
     --role Admin \
     --email admin@example.com || echo "Admin user already exists"
 
-# Test database connection
-echo "🔍 Testing database connection..."
-python -c "
-import psycopg2
-try:
-    conn = psycopg2.connect(
-        host='localhost',
-        database='airflow_db',
-        user='admin',
-        password='admin'
-    )
-    print('✅ PostgreSQL connection successful')
-    conn.close()
-except Exception as e:
-    print(f'❌ Database connection failed: {e}')
-    exit(1)
-"
-
 # Verify DAG is detected
 echo "🔍 Verifying DAG detection..."
-if airflow dags list | grep -q stellar; then
-    echo "✅ Stellar DAG detected successfully!"
-    airflow dags unpause stellar_classification_pipeline || echo "DAG already unpaused"
-else
-    echo "⚠️ Stellar DAG not detected - will be available after starting services"
-fi
+docker-compose exec airflow-webserver airflow dags list | grep stellar && echo "✅ Stellar DAG detected!" || echo "⚠️ DAG will be available shortly"
 
-# Set permissions
-chmod +x start.sh stop.sh
-
-echo "✅ Setup complete!"
+echo "✅ Docker setup complete!"
 echo ""
-echo "🚀 To start the pipeline:"
-echo "   ./start.sh"
-echo ""
-echo "🛑 To stop all services:"
-echo "   ./stop.sh"
-echo ""
-echo "🌐 Access points (after starting):"
+echo "🌐 Access points:"
 echo "   - Airflow UI: http://localhost:8080 (admin/admin)"
 echo "   - MLflow UI: http://localhost:5000"
 echo "   - FastAPI: http://localhost:8000/docs"
 echo ""
-echo "📊 Your stellar_classification_pipeline DAG will be visible in Airflow UI!"
-echo "🔑 Database: PostgreSQL with admin/admin credentials"
+echo "🔧 Useful Docker commands:"
+echo "   - Stop services: docker-compose down"
+echo "   - View logs: docker-compose logs -f [service-name]"
+echo "   - Restart services: docker-compose restart"
+echo "   - Rebuild images: docker-compose build --no-cache"
 echo ""
-echo "⚠️  Important: This is a LOCAL Python pipeline (no Docker/Kubernetes required)"
+echo "📊 Your stellar_classification_pipeline DAG will be visible in Airflow UI!"
+echo "🐳 All services are running in Docker containers for maximum portability!"
