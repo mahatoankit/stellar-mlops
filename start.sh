@@ -167,6 +167,7 @@ EOF
         echo "✅ Database permissions configured successfully"
     else
         echo "⚠️  Database user permissions may need more time to propagate"
+    fi
 
 else
     echo "❌ Not ready (may need more time)"

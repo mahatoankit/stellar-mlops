@@ -763,7 +763,7 @@ def split_and_scale_data(
             X_test_scaled = pd.DataFrame(
                 scaler.transform(X_test), columns=X_test.columns, index=X_test.index
             )
-            logger.info("✅ Features scaled using StandardScaler")
+
             return X_train_scaled, X_test_scaled, y_train, y_test, scaler
         else:
             logger.info("Feature scaling disabled")
