@@ -300,9 +300,13 @@ def train_stellar_models(
     # Load configuration
     config = load_config(config_path)
 
-    # Set MLflow experiment
-    experiment_name = config["mlflow"]["experiment_name"]
-    mlflow.set_experiment(experiment_name)
+    # Set MLflow experiment if available
+    if MLFLOW_AVAILABLE:
+        experiment_name = config["mlflow"]["experiment_name"]
+        mlflow.set_experiment(experiment_name)
+        logger.info(f"MLflow experiment set: {experiment_name}")
+    else:
+        logger.warning("MLflow not available - proceeding without experiment tracking")
 
     # Load training data
     X_train, X_test, y_train, y_test, scaler = load_training_data(artifacts_dir)
@@ -310,14 +314,20 @@ def train_stellar_models(
     models = {}
     results = {}
 
-    with mlflow.start_run(run_name="stellar_classification_training"):
-
+    # Start MLflow run if available, otherwise proceed without tracking
+    if MLFLOW_AVAILABLE:
+        mlflow_run = mlflow.start_run(run_name="stellar_classification_training")
         # Log dataset information
         mlflow.log_metric("train_samples", len(X_train))
         mlflow.log_metric("test_samples", len(X_test))
         mlflow.log_metric("n_features", X_train.shape[1])
         mlflow.log_metric("n_classes", len(config["classes"]["labels"]))
+    else:
+        mlflow_run = None
+        logger.info(f"Training dataset: {len(X_train)} samples, {X_train.shape[1]} features")
 
+    # Training models within proper context
+    try:
         # Train SVM Model
         logger.info("=" * 50)
         logger.info("Training SVM Model")
@@ -329,12 +339,13 @@ def train_stellar_models(
         models["svm"] = svm_model
         results["svm"] = svm_results
 
-        # Log SVM metrics
-        mlflow.log_metric("svm_accuracy", svm_results["accuracy"])
-        mlflow.log_metric(
-            "svm_f1_macro",
-            svm_results["classification_report"]["macro avg"]["f1-score"],
-        )
+        # Log SVM metrics if MLflow available
+        if MLFLOW_AVAILABLE:
+            mlflow.log_metric("svm_accuracy", svm_results["accuracy"])
+            mlflow.log_metric(
+                "svm_f1_macro",
+                svm_results["classification_report"]["macro avg"]["f1-score"],
+            )
 
         # Train Random Forest Model
         logger.info("=" * 50)
@@ -347,11 +358,12 @@ def train_stellar_models(
         models["random_forest"] = rf_model
         results["random_forest"] = rf_results
 
-        # Log Random Forest metrics
-        mlflow.log_metric("rf_accuracy", rf_results["accuracy"])
-        mlflow.log_metric(
-            "rf_f1_macro", rf_results["classification_report"]["macro avg"]["f1-score"]
-        )
+        # Log Random Forest metrics if MLflow available
+        if MLFLOW_AVAILABLE:
+            mlflow.log_metric("rf_accuracy", rf_results["accuracy"])
+            mlflow.log_metric(
+                "rf_f1_macro", rf_results["classification_report"]["macro avg"]["f1-score"]
+            )
 
         # Determine best model
         best_model_name = (
@@ -365,20 +377,32 @@ def train_stellar_models(
         logger.info(
             f"Best model: {best_model_name.upper()} with accuracy: {best_accuracy:.4f}"
         )
-        mlflow.log_metric("best_accuracy", best_accuracy)
-        mlflow.log_param("best_model", best_model_name)
+        
+        # Log best model metrics if MLflow available
+        if MLFLOW_AVAILABLE:
+            mlflow.log_metric("best_accuracy", best_accuracy)
+            mlflow.log_param("best_model", best_model_name)
 
         # Save best model artifacts
         model_path = save_model_artifacts(
             best_model, f"best_{best_model_name}", scaler, X_train.columns, config
         )
 
-        # Log model to MLflow
-        mlflow.sklearn.log_model(best_model, "model")
+        # Log model to MLflow if available
+        if MLFLOW_AVAILABLE:
+            mlflow.sklearn.log_model(best_model, "model")
 
         logger.info("Model training completed successfully!")
 
         return models, results, best_model_name
+    
+    except Exception as e:
+        logger.error(f"Training failed: {e}")
+        raise
+    finally:
+        # End MLflow run if it was started
+        if MLFLOW_AVAILABLE and mlflow_run:
+            mlflow.end_run()
 
 
 if __name__ == "__main__":

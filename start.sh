@@ -164,6 +164,19 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     end_time TIMESTAMP NULL,
     metadata JSON NULL COMMENT 'Additional run metadata'
 );
+
+-- Create training data view for ML pipeline
+CREATE OR REPLACE VIEW training_data_view AS
+SELECT 
+    obj_ID,
+    alpha, delta_coord,
+    u, g, r, i, z,
+    u_g_color, g_r_color, r_i_color, i_z_color,
+    redshift, plate, MJD, fiber_ID,
+    class,
+    data_split
+FROM stellar_data 
+WHERE is_processed = TRUE;
 EOF
     
     # Test user connection

@@ -40,6 +40,7 @@ models:
     kernel: "rbf"
     C: 1
     gamma: "scale"
+    random_state: 42
   random_forest:
     n_estimators: 100
     max_depth: 10
@@ -49,3 +50,31 @@ models:
     max_depth: 6
     learning_rate: 0.1
     random_state: 42
+
+# Classes configuration
+classes:
+  labels: ["GALAXY", "STAR", "QSO"]
+  num_classes: 3
+
+# MLflow experiment tracking
+mlflow:
+  experiment_name: "stellar_classification"
+  tracking_uri: "http://mlflow:5000"
+  artifact_location: "/opt/mlflow/artifacts"
+
+# Training configuration
+training:
+  test_size: 0.2
+  random_state: 42
+  cross_validation_folds: 5
+  hyperparameter_tuning: true
+
+# Evaluation metrics
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall" 
+    - "f1_score"
+  plot_confusion_matrix: true
+  plot_roc_curves: true
