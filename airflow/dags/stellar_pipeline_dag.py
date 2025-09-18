@@ -245,6 +245,9 @@ def split_and_scale(**context):
 
 def train_baseline_models(**context):
     """Train baseline models for stellar classification"""
+    import os
+    import joblib
+    
     logging.info("=== TRAINING BASELINE STELLAR MODELS ===")
 
     # Set up MLflow tracking
@@ -286,9 +289,6 @@ def train_baseline_models(**context):
     )
 
     # Explicitly save the best model to ensure consistent path
-    import joblib
-    import os
-    
     best_model = models[best_model_name]
     os.makedirs("models", exist_ok=True)
     best_model_path = f"models/best_{best_model_name}_model.pkl"
@@ -324,6 +324,9 @@ def train_baseline_models(**context):
 
 def model_evaluation(**context):
     """Evaluate stellar classification models"""
+    import os
+    import joblib
+    
     logging.info("=== MODEL EVALUATION ===")
 
     config = si.load_config()
@@ -342,10 +345,6 @@ def model_evaluation(**context):
     
     logging.info(f"Loading best model ({best_model_name}) from: {model_path}")
 
-    # Load the best trained model using the exact path from training
-    import joblib
-    import os
-    
     # Verify the model file exists before loading
     if not os.path.exists(model_path):
         logging.error(f"Model file not found at: {model_path}")
