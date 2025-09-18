@@ -57,6 +57,9 @@ services:
       MARIADB_DATABASE: stellar_db
       MARIADB_USER: stellar_user
       MARIADB_PASSWORD: stellar_user_password
+      # MLflow tracking configuration
+      MLFLOW_TRACKING_URI: http://stellar-mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: stellar_classification
     depends_on:
       postgres:
         condition: service_healthy

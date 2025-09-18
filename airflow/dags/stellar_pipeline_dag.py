@@ -247,12 +247,60 @@ def train_baseline_models(**context):
     """Train baseline models for stellar classification"""
     logging.info("=== TRAINING BASELINE STELLAR MODELS ===")
 
+    # Set up MLflow tracking
+    try:
+        import mlflow
+        import mlflow.sklearn
+        
+        # Configure MLflow tracking URI - try environment variable first, then fallback
+        mlflow_uri = os.environ.get('MLFLOW_TRACKING_URI', 'http://stellar-mlflow:5000')
+        mlflow.set_tracking_uri(mlflow_uri)
+        
+        # Test MLflow connectivity
+        try:
+            # Try to connect to MLflow server
+            client = mlflow.tracking.MlflowClient()
+            experiments = client.search_experiments()
+            logging.info(f"✅ MLflow server reachable at {mlflow_uri}")
+        except Exception as e:
+            logging.warning(f"⚠️ MLflow server not reachable: {e}")
+            logging.info("Continuing without MLflow tracking...")
+        
+        # Set experiment
+        experiment_name = os.environ.get('MLFLOW_EXPERIMENT_NAME', 'stellar_classification')
+        try:
+            mlflow.set_experiment(experiment_name)
+            logging.info(f"✅ MLflow experiment set: {experiment_name}")
+            logging.info(f"✅ MLflow tracking URI: {mlflow_uri}")
+        except Exception as e:
+            logging.warning(f"⚠️ Could not set MLflow experiment: {e}")
+            
+    except ImportError:
+        logging.warning("⚠️ MLflow not available - proceeding without experiment tracking")
+
     artifacts_path = context["task_instance"].xcom_pull(task_ids="split_scale_data")
 
     # Train models with processed data directory
     models, metrics, best_model_name = train_stellar_models(
         "config/datasets/stellar.yaml", "data/processed"
     )
+
+    # Explicitly save the best model to ensure consistent path
+    import joblib
+    import os
+    
+    best_model = models[best_model_name]
+    os.makedirs("models", exist_ok=True)
+    best_model_path = f"models/best_{best_model_name}_model.pkl"
+    
+    logging.info(f"Saving best model ({best_model_name}) to: {best_model_path}")
+    joblib.dump(best_model, best_model_path)
+    
+    # Verify the file was saved
+    if os.path.exists(best_model_path):
+        logging.info(f"✅ Best model successfully saved to {best_model_path}")
+    else:
+        logging.error(f"❌ Failed to save model to {best_model_path}")
 
     # Return only serializable data (exclude model objects and numpy arrays)
     serializable_metrics = {}
@@ -268,6 +316,7 @@ def train_baseline_models(**context):
 
     return {
         "best_model": best_model_name,
+        "model_path": best_model_path,  # Pass the exact path to evaluation
         "metrics": serializable_metrics,
         "training_completed": True,
     }
@@ -286,13 +335,27 @@ def model_evaluation(**context):
     X_test = pd.read_csv(artifacts_path["X_test"])
     y_test = pd.read_csv(artifacts_path["y_test"]).iloc[:, 0]  # Get the series
 
-    # Find the best available model (since we know random_forest performs best)
-    best_model_name = "random_forest"
+    # Get the best model path from the training task
+    train_results = context["task_instance"].xcom_pull(task_ids="train_baseline_models")
+    model_path = train_results["model_path"]
+    best_model_name = train_results["best_model"]
+    
+    logging.info(f"Loading best model ({best_model_name}) from: {model_path}")
 
-    # Load the best trained model
+    # Load the best trained model using the exact path from training
     import joblib
-
-    model_path = f"models/best_{best_model_name}_model.pkl"
+    import os
+    
+    # Verify the model file exists before loading
+    if not os.path.exists(model_path):
+        logging.error(f"Model file not found at: {model_path}")
+        # List contents of models directory for debugging
+        models_dir = "models"
+        if os.path.exists(models_dir):
+            available_files = os.listdir(models_dir)
+            logging.error(f"Available files in models/: {available_files}")
+        raise FileNotFoundError(f"Expected model at {model_path}, but it was not found. Check train_baseline_models to ensure the best model is saved there.")
+    
     model = joblib.load(model_path)
 
     # Evaluate the best model
