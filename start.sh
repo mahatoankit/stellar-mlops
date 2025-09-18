@@ -102,6 +102,20 @@ echo "🔧 Final permission fix after container startup..."
 sudo chown -R 50000:0 data models mlflow_artifacts logs postgres_data
 sudo chmod -R 777 data/temp data/processed data/plots
 
+# Initialize Airflow Database (essential for fresh systems)
+echo "🔧 Initializing Airflow database..."
+docker compose exec -T airflow-standalone airflow db init 2>/dev/null || echo "⚠️  Airflow DB init skipped (may already be initialized)"
+
+# Create Airflow admin user (for fresh installations)
+echo "👤 Creating Airflow admin user..."
+docker compose exec -T airflow-standalone airflow users create \
+    --username admin \
+    --firstname Admin \
+    --lastname User \
+    --role Admin \
+    --email admin@example.com \
+    --password admin 2>/dev/null || echo "⚠️  Admin user creation skipped (may already exist)"
+
 # Check service status
 echo "🔍 Checking service status..."
 docker compose ps
