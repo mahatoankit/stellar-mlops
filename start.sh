@@ -19,7 +19,17 @@ if ! docker info &> /dev/null; then
     sleep 3
 fi
 
-# Remove any problematic environment variables
+# Synchronize system time (helps with GPG signature validation)
+echo "⏰ Synchronizing system time..."
+sudo timedatectl set-ntp true 2>/dev/null || true
+sudo systemctl restart systemd-timesyncd 2>/dev/null || true
+
+# Clear Docker build cache to avoid stale GPG keys
+echo "🧹 Clearing Docker build cache..."
+docker builder prune -f 2>/dev/null || true
+
+# Comprehensive Docker environment cleanup to prevent corruption
+echo "🔧 Resetting Docker environment to clean state..."
 unset DOCKER_HOST 2>/dev/null || true
 unset DOCKER_TLS_VERIFY 2>/dev/null || true
 unset DOCKER_CERT_PATH 2>/dev/null || true
@@ -69,19 +79,19 @@ EOF
 fi
 
 # Check if containers are already running
-if docker-compose ps 2>/dev/null | grep -q "Up"; then
+if docker compose ps 2>/dev/null | grep -q "Up"; then
     echo "⚠️  Some services are already running. Stopping them first..."
-    docker-compose down 2>/dev/null || true
+    docker compose down 2>/dev/null || true
     sleep 5
 fi
 
 # Clean up any orphaned containers
 echo "🧹 Cleaning up any orphaned containers..."
-docker-compose down --remove-orphans 2>/dev/null || true
+docker compose down --remove-orphans 2>/dev/null || true
 
 # Start services with Docker Compose
 echo "🚀 Starting all services..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to start..."
@@ -94,14 +104,14 @@ sudo chmod -R 777 data/temp data/processed data/plots
 
 # Check service status
 echo "🔍 Checking service status..."
-docker-compose ps
+docker compose ps
 
 # Verify services are healthy
 echo "🏥 Performing health checks..."
 
 # Check PostgreSQL
 echo -n "📊 PostgreSQL: "
-if docker-compose exec -T postgres pg_isready -U admin &>/dev/null; then
+if docker compose exec -T postgres pg_isready -U admin &>/dev/null; then
     echo "✅ Ready"
 else
     echo "❌ Not ready (may need more time)"
@@ -109,11 +119,11 @@ fi
 
 # Check MariaDB and set up permissions
 echo -n "🗄️  MariaDB: "
-if docker-compose exec -T mariadb-columnstore mysql -u root -pstellar_password -e "SELECT 1;" &>/dev/null; then
+if docker compose exec -T mariadb-columnstore mysql -u root -pstellar_password -e "SELECT 1;" &>/dev/null; then
     echo "✅ Ready - Setting up database permissions..."
     
     # Create database and user with proper permissions
-    docker-compose exec -T mariadb-columnstore mysql -u root -pstellar_password << 'EOF'
+    docker compose exec -T mariadb-columnstore mysql -u root -pstellar_password << 'EOF'
 CREATE DATABASE IF NOT EXISTS stellar_db;
 CREATE USER IF NOT EXISTS 'stellar_user'@'%' IDENTIFIED BY 'stellar_user_password';
 CREATE USER IF NOT EXISTS 'stellar_user'@'localhost' IDENTIFIED BY 'stellar_user_password';
@@ -180,7 +190,7 @@ WHERE is_processed = TRUE;
 EOF
     
     # Test user connection
-    if docker-compose exec -T mariadb-columnstore mysql -u stellar_user -pstellar_user_password -e "SELECT 1;" &>/dev/null; then
+    if docker compose exec -T mariadb-columnstore mysql -u stellar_user -pstellar_user_password -e "SELECT 1;" &>/dev/null; then
         echo "✅ Database permissions configured successfully"
     else
         echo "⚠️  Database user permissions may need more time to propagate"
@@ -236,13 +246,13 @@ echo "   📈 MLflow UI: http://localhost:5000"
 echo "   🔌 FastAPI: http://localhost:8000/docs"
 echo ""
 echo "🔧 Useful Commands:"
-echo "   📊 Check status: docker-compose ps"
-echo "   📝 View logs: docker-compose logs -f [service-name]"
-echo "   🛑 Stop services: docker-compose down"
-echo "   🔄 Restart: docker-compose restart [service-name]"
+echo "   📊 Check status: docker compose ps"
+echo "   📝 View logs: docker compose logs -f [service-name]"
+echo "   🛑 Stop services: docker compose down"
+echo "   🔄 Restart: docker compose restart [service-name]"
 echo ""
 echo "🎯 Your stellar_classification_pipeline DAG should be visible in Airflow!"
 echo "   Wait 1-2 minutes for all services to fully initialize."
 echo ""
 echo "🚨 If tasks still fail with permission errors, run:"
-echo "   sudo chmod -R 777 data && docker-compose restart airflow-standalone"
+echo "   sudo chmod -R 777 data && docker compose restart airflow-standalone"

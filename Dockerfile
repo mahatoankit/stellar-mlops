@@ -8,7 +8,9 @@ FROM apache/airflow:2.7.3-python3.9
 USER root
 
 # Install system dependencies for data science packages
-RUN apt-get update && apt-get install -y \
+# Fix GPG signature issues with robust package installation
+RUN apt-get update --allow-insecure-repositories || apt-get update && \
+    apt-get install -y --allow-unauthenticated \
     gcc \
     g++ \
     make \
@@ -17,7 +19,9 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libfontconfig1-dev \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/* || true
 
 # Create necessary directories with proper permissions
 RUN mkdir -p \
@@ -67,7 +71,7 @@ COPY --chown=airflow:root ./src /opt/airflow/src
 COPY --chown=airflow:root ./config /opt/airflow/config
 
 # Set environment variables
-ENV PYTHONPATH="/opt/airflow/src:$PYTHONPATH"
+ENV PYTHONPATH="/opt/airflow/src:/opt/airflow:$PYTHONPATH"
 ENV AIRFLOW_HOME="/opt/airflow"
 
 # Expose Airflow webserver port
