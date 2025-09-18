@@ -158,7 +158,11 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     run_type VARCHAR(50),
     status VARCHAR(50),
     error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    records_processed INT DEFAULT 0,
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP NULL,
+    metadata JSON NULL COMMENT 'Additional run metadata'
 );
 EOF
     
