@@ -1,3 +1,16 @@
+"""
+Stellar Classification MLOps Pipeline
+=====================================
+
+A comprehensive machine learning pipeline for stellar classification using Airflow orchestration.
+This DAG performs end-to-end ML operations including data ingestion, feature engineering,
+model training, evaluation, and artifact management.
+
+Author: MLOPS Team
+Version: 1.0.0
+Framework: Apache Airflow, MLflow, scikit-learn
+"""
+
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -6,6 +19,10 @@ import os
 import logging
 import pandas as pd
 import importlib.util
+
+# ============================================================================
+# Environment Configuration
+# ============================================================================
 
 # Add src path - handle both local and Docker environments
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +38,10 @@ src_path = os.path.join(project_root, "src")
 
 if src_path not in sys.path:
     sys.path.append(src_path)
+
+# ============================================================================
+# Module Imports
+# ============================================================================
 
 # Import stellar ingestion functions from standalone module file
 stellar_ingestion_path = os.path.join(src_path, "stellar_ingestion.py")
@@ -45,9 +66,16 @@ from stellar_ingestion import (
     save_model_artifacts,
 )
 
-# Configure logging
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# DAG Configuration
+# ============================================================================
 
 # Default arguments for the DAG
 default_args = {
@@ -70,6 +98,10 @@ dag = DAG(
     tags=["ml", "stellar", "classification"],
 )
 
+# ============================================================================
+# Pipeline Task Functions
+# ============================================================================
+
 
 def ingest_to_database(**context):
     """
@@ -77,6 +109,16 @@ def ingest_to_database(**context):
 
     This task implements the first stage of the database-driven pipeline,
     loading raw data into the 'One Big Table' structure for optimal ML performance.
+    
+    Args:
+        context: Airflow context containing task instance and other metadata
+        
+    Returns:
+        dict: Success status and metadata about the ingested data
+        
+    Raises:
+        ConnectionError: If database connection fails
+        FileNotFoundError: If source data file is not found
     """
     logging.info("=== STARTING DATABASE INGESTION ===")
 
@@ -311,7 +353,29 @@ def split_and_scale(**context):
 
 
 def train_baseline_models(**context):
-    """Train Random Forest model for stellar classification - Simplified for MLOps Pipeline Demo"""
+    """
+    Train Random Forest model for stellar classification.
+    
+    This function implements a simplified MLOps pipeline demonstration using
+    Random Forest classifier with hyperparameter tuning and MLflow tracking.
+    
+    The function performs:
+    - Data loading from processed features
+    - Random Forest model training with optimized parameters
+    - Model evaluation and metrics calculation
+    - MLflow experiment tracking (when available)
+    - Model artifact storage for downstream deployment
+    
+    Args:
+        context: Airflow context containing task instance and XCom data
+        
+    Returns:
+        dict: Training results including model metrics and artifact paths
+        
+    Raises:
+        FileNotFoundError: If processed training data is not available
+        MLflowException: If MLflow tracking fails (logged but not critical)
+    """
     import joblib
     
     logging.info("=== TRAINING STELLAR CLASSIFICATION MODEL (Random Forest) ===")
@@ -462,7 +526,28 @@ def model_evaluation(**context):
 
 
 def save_final_model(**context):
-    """Save the final stellar classification model and artifacts - Simplified for MLOps Demo"""
+    """
+    Save the final stellar classification model and artifacts for deployment.
+    
+    This function handles the final model persistence step in the MLOps pipeline,
+    preparing the trained model for production deployment and inference.
+    
+    The function performs:
+    - Loading the best performing model from training
+    - Model validation and integrity checks
+    - Final model artifact creation for deployment
+    - Metadata generation for model registry
+    
+    Args:
+        context: Airflow context containing task instance and XCom data
+        
+    Returns:
+        dict: Model saving results including file paths and metadata
+        
+    Raises:
+        FileNotFoundError: If the trained model file is not found
+        IOError: If model artifact saving fails
+    """
     logging.info("=== SAVING FINAL MODEL ===")
 
     # Simplified: Always use Random Forest for consistency

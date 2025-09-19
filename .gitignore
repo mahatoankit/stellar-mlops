@@ -1,7 +1,10 @@
-# Byte-compiled / optimized / DLL files
+# Stellar Classification MLOps - Professional .gitignore
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
 # Distribution / packaging
 .Python

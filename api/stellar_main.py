@@ -1,3 +1,22 @@
+"""
+Stellar Classification API
+==========================
+
+FastAPI-based REST API for stellar classification inference using trained ML models.
+Provides endpoints for model prediction, health checks, and system diagnostics.
+
+Features:
+- Real-time stellar classification predictions
+- Model health monitoring and diagnostics
+- Database connectivity status
+- Comprehensive error handling and logging
+- OpenAPI/Swagger documentation
+
+Author: MLOPS Team
+Version: 1.0.0
+Framework: FastAPI, scikit-learn, MLflow
+"""
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pandas as pd
@@ -9,10 +28,18 @@ import joblib
 import json
 from typing import Dict, Any, List
 
+# ============================================================================
+# Environment Configuration
+# ============================================================================
+
 # Add src path for database utilities (relative to current file)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(os.path.join(project_root, "src"))
+
+# ============================================================================
+# Database Integration
+# ============================================================================
 
 # Database utilities for MariaDB integration
 try:
