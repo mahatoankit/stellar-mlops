@@ -83,11 +83,78 @@ def ingest_to_database(**context):
     config = si.load_config()
     data_path = os.path.join(project_root, config.get("data_path", "data/raw/star_classification.csv"))
 
-    try:
-        rows_inserted = si.ingest_data_to_db(data_path)
-        logging.info(f"Successfully ingested {rows_inserted} rows into database")
-        return rows_inserted
-    except Exception as e:
+    # Add database connectivity test before attempting ingestion
+    def test_db_connection():
+        """Test database connectivity with detailed error reporting"""
+        try:
+            import mysql.connector
+            from mysql.connector import Error
+            
+            db_config = {
+                'host': os.environ.get('MARIADB_HOST', 'mariadb-columnstore'),
+                'port': int(os.environ.get('MARIADB_PORT', 3306)),
+                'user': os.environ.get('MARIADB_USER', 'stellar_user'),
+                'password': os.environ.get('MARIADB_PASSWORD', 'stellar_user_password'),
+                'database': os.environ.get('MARIADB_DATABASE', 'stellar_db')
+            }
+            
+            logging.info(f"Testing connection to {db_config['host']}:{db_config['port']}")
+            
+            connection = mysql.connector.connect(**db_config)
+            if connection.is_connected():
+                cursor = connection.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+                cursor.close()
+                connection.close()
+                logging.info("✅ Database connection test successful")
+                return True
+                
+        except Error as e:
+            logging.error(f"❌ Database connection failed: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"❌ Database connection error: {e}")
+            return False
+
+    # Add connection retry logic for cross-system compatibility
+    max_retries = 3
+    retry_delay = 10  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            logging.info(f"Database connection attempt {attempt + 1}/{max_retries}")
+            
+            # Test database connectivity first
+            import time
+            if attempt > 0:
+                logging.info(f"Waiting {retry_delay} seconds before retry...")
+                time.sleep(retry_delay)
+            
+            # Test connection before attempting ingestion
+            if not test_db_connection():
+                raise Exception("Database connectivity test failed")
+            
+            rows_inserted = si.ingest_data_to_db(data_path)
+            logging.info(f"Successfully ingested {rows_inserted} rows into database")
+            return rows_inserted
+            
+        except Exception as e:
+            logging.error(f"Database ingestion attempt {attempt + 1} failed: {e}")
+            if attempt == max_retries - 1:
+                logging.error("All database connection attempts failed. Checking MariaDB service...")
+                # Try to provide helpful error diagnosis
+                try:
+                    import subprocess
+                    result = subprocess.run(['docker', 'compose', 'ps', 'stellar-mariadb'], 
+                                          capture_output=True, text=True, cwd=project_root)
+                    logging.info(f"MariaDB container status: {result.stdout}")
+                except:
+                    pass
+                raise Exception(f"Database ingestion failed after {max_retries} attempts. Last error: {e}")
+            else:
+                logging.warning(f"Attempt {attempt + 1} failed, retrying...")
+                continue
         logging.error(f"Database ingestion failed: {e}")
         raise
 
@@ -244,10 +311,10 @@ def split_and_scale(**context):
 
 
 def train_baseline_models(**context):
-    """Train baseline models for stellar classification"""
+    """Train Random Forest model for stellar classification - Simplified for MLOps Pipeline Demo"""
     import joblib
     
-    logging.info("=== TRAINING BASELINE STELLAR MODELS ===")
+    logging.info("=== TRAINING STELLAR CLASSIFICATION MODEL (Random Forest) ===")
 
     # Set up MLflow tracking
     try:
@@ -282,41 +349,65 @@ def train_baseline_models(**context):
 
     artifacts_path = context["task_instance"].xcom_pull(task_ids="split_scale_data")
 
-    # Train models with processed data directory
-    models, metrics, best_model_name = train_stellar_models(
-        "config/datasets/stellar.yaml", "data/processed"
-    )
-
-    # Explicitly save the best model to ensure consistent path
-    best_model = models[best_model_name]
-    os.makedirs("models", exist_ok=True)
-    best_model_path = f"models/best_{best_model_name}_model.pkl"
+    # Simplified: Train only Random Forest model for MLOps demo
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, classification_report
+    import pandas as pd
     
-    logging.info(f"Saving best model ({best_model_name}) to: {best_model_path}")
-    joblib.dump(best_model, best_model_path)
+    # Load training data
+    X_train = pd.read_csv("data/processed/X_train.csv")
+    X_test = pd.read_csv("data/processed/X_test.csv") 
+    y_train = pd.read_csv("data/processed/y_train.csv").squeeze()
+    y_test = pd.read_csv("data/processed/y_test.csv").squeeze()
+    
+    logging.info(f"Training data: {X_train.shape}, Test data: {X_test.shape}")
+    
+    # Train Random Forest model
+    logging.info("Training Random Forest model...")
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Evaluate model
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    logging.info(f"Random Forest Accuracy: {accuracy:.4f}")
+    logging.info("Classification Report:")
+    logging.info(classification_report(y_test, y_pred))
+
+    # Save the model with consistent naming
+    os.makedirs("models", exist_ok=True)
+    model_path = "models/best_random_forest_model.pkl"
+    
+    logging.info(f"Saving model to: {model_path}")
+    joblib.dump(model, model_path)
     
     # Verify the file was saved
-    if os.path.exists(best_model_path):
-        logging.info(f"✅ Best model successfully saved to {best_model_path}")
+    if os.path.exists(model_path):
+        logging.info(f"✅ Model successfully saved to {model_path}")
     else:
-        logging.error(f"❌ Failed to save model to {best_model_path}")
+        logging.error(f"❌ Failed to save model to {model_path}")
 
-    # Return only serializable data (exclude model objects and numpy arrays)
-    serializable_metrics = {}
-    for model_name, model_metrics in metrics.items():
-        serializable_metrics[model_name] = {
-            "accuracy": model_metrics["accuracy"],
-            "classification_report": {
-                k: v
-                for k, v in model_metrics["classification_report"].items()
-                if k not in ["confusion_matrix", "predictions", "probabilities"]
-            },
-        }
+    # Log to MLflow if available
+    try:
+        with mlflow.start_run(run_name="random_forest_training"):
+            mlflow.log_metric("accuracy", accuracy)
+            mlflow.log_param("model_type", "RandomForest")
+            mlflow.log_param("n_estimators", 100)
+            logging.info("✅ Metrics logged to MLflow")
+    except Exception as e:
+        logging.warning(f"⚠️ MLflow logging failed: {e}")
 
+    # Return simplified results for downstream tasks - Always Random Forest for MLOps demo
     return {
-        "best_model": best_model_name,
-        "model_path": best_model_path,  # Pass the exact path to evaluation
-        "metrics": serializable_metrics,
+        "best_model": "random_forest",
+        "model_path": model_path,
+        "metrics": {
+            "random_forest": {
+                "accuracy": accuracy,
+                "classification_report": {"accuracy": accuracy}
+            }
+        },
         "training_completed": True,
     }
 
@@ -371,22 +462,31 @@ def model_evaluation(**context):
 
 
 def save_final_model(**context):
-    """Save the final stellar classification model and artifacts"""
+    """Save the final stellar classification model and artifacts - Simplified for MLOps Demo"""
     logging.info("=== SAVING FINAL MODEL ===")
 
-    # Get the best model from evaluation
-    evaluation_results = context["task_instance"].xcom_pull(task_ids="evaluate_models")
+    # Simplified: Always use Random Forest for consistency
+    model_path = "models/best_random_forest_model.pkl"
+    
+    logging.info(f"Loading Random Forest model from: {model_path}")
 
-    # Load the best model directly (we know it's random_forest from our simplified pipeline)
+    # Load the model
     import joblib
 
-    best_model_name = "random_forest"
-    model_path = f"models/best_{best_model_name}_model.pkl"
+    # Verify the model file exists before loading
+    if not os.path.exists(model_path):
+        logging.error(f"Model file not found at: {model_path}")
+        # List contents of models directory for debugging
+        models_dir = "models"
+        if os.path.exists(models_dir):
+            available_files = os.listdir(models_dir)
+            logging.error(f"Available files in models/: {available_files}")
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
     best_model = joblib.load(model_path)
 
     # Load feature names and scaler from artifacts
     import json
-    import joblib
 
     with open("models/feature_names.json", "r") as f:
         feature_names = json.load(f)
@@ -404,7 +504,7 @@ def save_final_model(**context):
         models_dir="models/",
     )
 
-    logging.info(f"Model saved to: {saved_paths}")
+    logging.info(f"Final model saved to: {saved_paths}")
     return saved_paths
 
 

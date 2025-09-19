@@ -10,14 +10,22 @@ services:
       MARIADB_DATABASE: stellar_db
       MARIADB_USER: stellar_user
       MARIADB_PASSWORD: stellar_user_password
+      # Add additional MariaDB configuration for better stability
+      MARIADB_ROOT_HOST: '%'
+      MYSQL_ROOT_HOST: '%'
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pstellar_password"]
-      timeout: 20s
-      retries: 10
+      timeout: 30s
+      retries: 15
+      interval: 10s
+      start_period: 60s
+    # Add explicit network for better cross-system compatibility
+    networks:
+      - default
 
   # PostgreSQL Database for Airflow
   postgres:

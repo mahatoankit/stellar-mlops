@@ -41,6 +41,11 @@ class DatabaseConfig:
             "password": self.password,
             "autocommit": True,
             "charset": "utf8mb4",
+            # Add connection timeout and retry parameters for cross-system compatibility
+            "connection_timeout": 30,
+            "connect_timeout": 30,
+            "raise_on_warnings": False,
+            "sql_mode": '',
         }
 
 
