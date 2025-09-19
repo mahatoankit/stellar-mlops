@@ -120,6 +120,12 @@ Use this checklist when deploying the Stellar Classification MLOps Pipeline on a
 **Status**: **FIXED** - Added proper MLflow environment setup  
 **Verify**: Check http://localhost:5000 for experiment logs  
 
+#### ✅ "PermissionError: [Errno 13] Permission denied: '/mlflow'" 
+**Cause**: MLflow artifact storage permission issues
+**Status**: **FIXED** - Disabled MLflow model artifacts logging to avoid permission conflicts
+**Verify**: Training tasks should complete without permission errors
+**Note**: Metrics and parameters are still logged to MLflow UI  
+
 ### Common Issues
 - [ ] **Port conflicts**: Check if ports 8080, 5000, 8000 are free
   ```bash

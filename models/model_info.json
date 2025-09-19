@@ -1,6 +1,6 @@
 {
-  "model_name": "best_svm",
-  "model_type": "SVC",
+  "model_name": "stellar_classifier_final",
+  "model_type": "RandomForestClassifier",
   "feature_count": 21,
   "classes": [
     "GALAXY",

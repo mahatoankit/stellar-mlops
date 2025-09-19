@@ -60,6 +60,7 @@ services:
       # MLflow tracking configuration
       MLFLOW_TRACKING_URI: http://stellar-mlflow:5000
       MLFLOW_EXPERIMENT_NAME: stellar_classification
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: file:///opt/airflow/mlflow_artifacts
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +74,7 @@ services:
       - ./data/processed:/opt/airflow/data/processed
       - ./models:/opt/airflow/models
       - ./config:/opt/airflow/config
+      - ./mlflow_artifacts:/opt/airflow/mlflow_artifacts
     working_dir: /opt/airflow
     command: >
       bash -c "
@@ -140,9 +142,10 @@ services:
     container_name: stellar-mlflow
     ports:
       - "5000:5000"
-    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./artifacts
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
     volumes:
       - ./mlflow_data:/mlflow
+      - ./mlflow_artifacts:/mlflow/artifacts
     restart: always
 
 # Volumes for persistent data storage

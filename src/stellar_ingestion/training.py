@@ -388,9 +388,15 @@ def train_stellar_models(
             best_model, f"best_{best_model_name}", scaler, X_train.columns, config
         )
 
-        # Log model to MLflow if available
+        # Log model to MLflow if available - Skip for now due to permission issues
         if MLFLOW_AVAILABLE:
-            mlflow.sklearn.log_model(best_model, "model")
+            try:
+                # Log just the metrics and params, skip model artifacts
+                logger.info("MLflow model logging skipped to avoid permission issues")
+                # mlflow.sklearn.log_model(best_model, "model")
+            except Exception as e:
+                logger.warning(f"MLflow model logging failed: {e}")
+                # Continue without failing the task
 
         logger.info("Model training completed successfully!")
 
