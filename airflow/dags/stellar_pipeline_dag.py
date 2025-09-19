@@ -245,7 +245,6 @@ def split_and_scale(**context):
 
 def train_baseline_models(**context):
     """Train baseline models for stellar classification"""
-    import os
     import joblib
     
     logging.info("=== TRAINING BASELINE STELLAR MODELS ===")
@@ -324,7 +323,6 @@ def train_baseline_models(**context):
 
 def model_evaluation(**context):
     """Evaluate stellar classification models"""
-    import os
     import joblib
     
     logging.info("=== MODEL EVALUATION ===")
